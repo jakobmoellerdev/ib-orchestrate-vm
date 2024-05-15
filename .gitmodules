@@ -1,6 +1,6 @@
 [submodule "fastsno"]
 	path = fastsno
-	url = https://github.com/omertuc/fastsno
+	url = https://github.com/jakobmoellerdev/fastsno
 [submodule "recert"]
 	path = recert
 	url = https://github.com/rh-ecosystem-edge/recert.git
