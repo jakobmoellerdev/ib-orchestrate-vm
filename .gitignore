@@ -1,5 +1,6 @@
 bip-orchestrate-vm
 lifecycle-agent
+fastsno
 /.dns_changes_confirmed
 /net.xml
 /nohup.out

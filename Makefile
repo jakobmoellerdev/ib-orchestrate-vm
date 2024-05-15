@@ -4,7 +4,6 @@ MAKEFLAGS += --no-builtin-rules
 IMAGE_BASED_DIR = .
 SNO_DIR = ./bip-orchestrate-vm
 
--include .config-override
 
 # Define precache mode (partition or directory)
 PRECACHE_MODE ?= partition
@@ -13,6 +12,11 @@ PRECACHE_MODE ?= partition
 IBU_ROLLBACK ?= Enabled
 
 include network.env
+
+ifneq (,$(wildcard .env))
+    include .env
+    export
+endif
 
 default: help
 
@@ -73,6 +77,7 @@ SSH_HOST = core@$(HOST_IP)
 CLUSTER ?= $(SEED_VM_NAME)
 SNO_KUBECONFIG ?= $(SNO_DIR)/workdir-$(CLUSTER)/auth/kubeconfig
 oc = oc --kubeconfig $(SNO_KUBECONFIG)
+docker ?= $(shell command -v docker 2>&1 >/dev/null && echo docker || echo podman)
 
 $(SSH_KEY_PRIV_PATH):
 	@echo "No private key $@ found, generating a private-public pair"
@@ -188,8 +193,13 @@ seed-vm-remove: vm-remove ## Remove the seed VM and the storage associated with 
 seed-lifecycle-agent-deploy: CLUSTER=$(SEED_VM_NAME)
 seed-lifecycle-agent-deploy: lifecycle-agent-deploy
 
+.PHONY: seed-apiserver-audit-profile
+seed-apiserver-audit-profile: CLUSTER=$(SEED_VM_NAME)
+seed-apiserver-audit-profile:
+	$(oc) apply -f fastsno/manifests/audit.yaml
+
 .PHONY: seed-cluster-prepare
-seed-cluster-prepare: seed-directory-varlibcontainers seed-lifecycle-agent-deploy ## Prepare seed VM cluster
+seed-cluster-prepare: seed-directory-varlibcontainers seed-lifecycle-agent-deploy seed-apiserver-audit-profile ## Prepare seed VM cluster
 
 .PHONY: seed-directory-varlibcontainers
 seed-directory-varlibcontainers: CLUSTER=$(SEED_VM_NAME)
@@ -272,11 +282,36 @@ oadp-deploy:
 		sleep 5; \
 	done; echo
 
+.PHONY: recert
+recert: checkenv
+	$(docker) build -t $(RECERT_IMAGE) -f recert/Dockerfile recert
+	@echo "Recert image built"
+	$(docker) push $(RECERT_IMAGE)
+	@echo "Recert image pushed"
+
 ## Extra
 .PHONY: lca-logs
 lca-logs: CLUSTER=$(TARGET_VM_NAME)
 lca-logs: ## Tail through LifeCycle Agent logs	make lca-logs CLUSTER=seed
 	$(oc) logs -f -c manager -n openshift-lifecycle-agent -l app.kubernetes.io/component=lifecycle-agent
+
+
+.PHONY: audit-logs
+audit-logs: CLUSTER=$(SEED_VM_NAME)
+audit-logs:
+	fastsno/download_audit.sh
+
+
+.PHONY: generate-timeline-graph
+generate-timeline-graph:
+	@echo "Generating timeline graph"
+	fastsno/graph.sh jq/clusteroperators.jq jq/resources.jq
+
+.PHONY: start-timeline-graph
+start-timeline-graph:
+	@echo "Starting timeline graph"
+	fastsno/display_timeline.sh
+
 
 start-iso-abi: checkenv bip-orchestrate-vm check-old-net network
 	if [[ "$(PRECACHE_MODE)" == "partition" ]]; then \
