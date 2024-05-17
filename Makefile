@@ -282,6 +282,7 @@ oadp-deploy:
 		sleep 5; \
 	done; echo
 
+## Recert
 .PHONY: recert
 recert: checkenv
 	$(docker) build -t $(RECERT_IMAGE) -f recert/Dockerfile recert
@@ -289,21 +290,46 @@ recert: checkenv
 	$(docker) push $(RECERT_IMAGE)
 	@echo "Recert image pushed"
 
+## Core Operator
+.PHONY: cluster-authentication-operator
+cluster-authentication-operator: checkenv
+	# requires ci login to registry.ci.openshift.org/ocp/builder
+	# and registry.ci.openshift.org/ocp
+	@echo "building Cluster Authentication Operator image"
+	$(docker) build -t $(CLUSTER_AUTHENTICATION_OPERATOR_IMAGE) \
+		-f cluster-authentication-operator/Dockerfile.rhel7 \
+		cluster-authentication-operator
+	@echo "Cluster Authentication Operator image built"
+	$(docker) push $(CLUSTER_AUTHENTICATION_OPERATOR_IMAGE)
+	@echo "Cluster Authentication Operator image pushed"
+
+.PHONY: deploy-cluster-authentication-operator
+deploy-cluster-authentication-operator: CLUSTER=$(SEED_VM_NAME)
+deploy-cluster-authentication-operator: checkenv cvo-disable
+	@echo "Replacing Cluster Authentication Operator image in Seed"
+	$(oc) set image deployment/authentication-operator \
+		authentication-operator=$(CLUSTER_AUTHENTICATION_OPERATOR_IMAGE) \
+		-n openshift-authentication-operator
+
 ## Extra
 .PHONY: lca-logs
 lca-logs: CLUSTER=$(TARGET_VM_NAME)
 lca-logs: ## Tail through LifeCycle Agent logs	make lca-logs CLUSTER=seed
 	$(oc) logs -f -c manager -n openshift-lifecycle-agent -l app.kubernetes.io/component=lifecycle-agent
 
+.PHONY: cvo-disable
+cvo-disable: CLUSTER=$(SEED_VM_NAME)
+cvo-disable:
+	$(oc) scale --replicas 0 -n openshift-cluster-version deployments/cluster-version-operator
+	@echo "Cluster Version Operator force scaled to 0 to allow changes to core operators"
 
 .PHONY: audit-logs
-audit-logs: CLUSTER=$(SEED_VM_NAME)
+audit-logs: CLUSTER=$(TARGET_VM_NAME)
 audit-logs:
-	fastsno/download_audit.sh
-
+	KUBECONFIG=$(SNO_KUBECONFIG) fastsno/download_audit.sh
 
 .PHONY: generate-timeline-graph
-generate-timeline-graph:
+generate-timeline-graph: audit-logs
 	@echo "Generating timeline graph"
 	fastsno/graph.sh jq/clusteroperators.jq jq/resources.jq
 

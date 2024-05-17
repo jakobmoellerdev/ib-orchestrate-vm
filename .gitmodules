@@ -1,6 +1,11 @@
 [submodule "fastsno"]
 	path = fastsno
 	url = https://github.com/jakobmoellerdev/fastsno
+	branch = main
 [submodule "recert"]
 	path = recert
-	url = https://github.com/rh-ecosystem-edge/recert.git
+	url = https://github.com/jakobmoellerdev/recert.git
+	branch = main
+[submodule "cluster-authentication-operator"]
+	path = cluster-authentication-operator
+	url = https://github.com/openshift/cluster-authentication-operator.git
